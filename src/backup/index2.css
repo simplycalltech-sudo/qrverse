@@ -1,0 +1,278 @@
+/* ===============================
+   QRVerse - Final Layout & Style
+   =============================== */
+
+/* ===== Reset & Base ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+  background-color: #ffffff;
+  color: #111827;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ===== Header ===== */
+.app-header {
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 2rem;
+}
+
+.header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.logo-img {
+  width: 40px;
+  height: 40px;
+}
+
+.site-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* ===== Main Layout ===== */
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  background-color: #f9fafb; /* subtle gray to show spacing */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.main-container {
+  width: 100%;
+  max-width: 1400px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5rem; /* clear visible space between sections */
+  align-items: stretch;
+  align-content: start;
+  margin: 0 auto;
+}
+
+/* ===== Section Cards ===== */
+.section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 440px;
+  box-sizing: border-box;
+}
+
+.section:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Numbered section labels */
+.section-title::before {
+  content: attr(data-number);
+  display: inline-block;
+  background-color: #2563eb;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+/* ===== Input & Form Styles ===== */
+.qr-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.qr-input:focus {
+  border-color: #2563eb;
+}
+
+.qr-input:hover,
+select:hover {
+  border-color: #f97316;
+}
+
+/* ===== Customization Section ===== */
+.customization-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.customization-row label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+/* ===== Preview Section ===== */
+.preview-card {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px dashed #cbd5e1;
+  box-sizing: border-box;
+  min-height: 240px;
+  text-align: center;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.preview-card img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* ===== Buttons ===== */
+.secondary-btn {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.7rem 1.3rem;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  align-self: flex-start;
+}
+
+.secondary-btn:hover {
+  background-color: #1e3a8a;
+  transform: translateY(-2px);
+}
+
+.secondary-btn:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* ===== Footer ===== */
+.app-footer {
+  text-align: center;
+  padding: 1rem;
+  background-color: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* ===== Colors & Accents ===== */
+:root {
+  --primary-color: #1e40af;
+  --accent-color: #f97316;
+}
+
+/* ===== Optional Vertical Dividers ===== */
+.main-container > .section:not(:last-child) {
+  position: relative;
+}
+
+.main-container > .section:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  right: -1.25rem;
+  height: 80%;
+  width: 1px;
+  background-color: #e5e7eb;
+}
+
+/* ===== Responsive Layout ===== */
+@media (max-width: 1024px) {
+  .main-container {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.8rem;
+  }
+
+  .main-container > .section:not(:last-child)::after {
+    display: none;
+  }
+
+  .section {
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-container {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+
+  .main-container > .section:not(:last-child)::after {
+    display: none;
+  }
+
+  .section {
+    min-height: auto;
+    padding: 1.2rem;
+  }
+
+  .customization-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .preview-card {
+    min-height: 180px;
+  }
+}
