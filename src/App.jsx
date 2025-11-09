@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import QRCodeLib from "qrcode";
 import jsPDF from "jspdf";
 import * as UTIF from "utif";
 
@@ -25,16 +24,6 @@ function usePersistentState(key, defaultValue) {
   return [value, setValue];
 }
 
-/* ===== SVG → EPS Converter ===== */
-const svgToEPS = (svgData) => {
-  const epsHeader = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1000 1000\n";
-  const epsBody = svgData
-    .replace(/<svg.*?>/, "")
-    .replace("</svg>", "")
-    .replace(/fill="/g, "setrgbcolor\nfill ");
-  return epsHeader + epsBody + "\nshowpage";
-};
-
 /* ===== Main App Component ===== */
 function App() {
   const [inputType, setInputType] = usePersistentState("qrverse-inputType", "URL");
@@ -45,8 +34,9 @@ function App() {
   const [downloadFormat, setDownloadFormat] = usePersistentState("qrverse-format", "png");
 
   const [pngDataUrl, setPngDataUrl] = useState(null);
-  const [svgString, setSvgString] = useState(null);
   const [error, setError] = useState(null);
+
+  const API_BASE = "https://qrverse-backend-iodd.onrender.com";
 
   /* ===== Build QR Content ===== */
   const buildContent = () => {
@@ -73,7 +63,7 @@ function App() {
     }
   };
 
-  /* ===== Auto-generate Preview ===== */
+  /* ===== Fetch QR from Backend ===== */
   useEffect(() => {
     const timeout = setTimeout(async () => {
       const content = buildContent();
@@ -82,25 +72,26 @@ function App() {
         return;
       }
       try {
-        const dataUrl = await QRCodeLib.toDataURL(content, {
-          errorCorrectionLevel: "M",
-          margin: 1,
-          color: { dark: fgColor, light: bgColor },
-          width: qrSize,
+        const params = new URLSearchParams({
+          data: content,
+          fg: fgColor,
+          bg: bgColor,
+          box_size: "10",
+          border: "4",
+          error: "H",
         });
-        const svg = await QRCodeLib.toString(content, {
-          type: "svg",
-          errorCorrectionLevel: "M",
-          margin: 1,
-          color: { dark: fgColor, light: bgColor },
-        });
-        setPngDataUrl(dataUrl);
-        setSvgString(svg);
+
+        const response = await fetch(`${API_BASE}/generate?${params.toString()}`);
+        if (!response.ok) throw new Error("Backend Error");
+
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        setPngDataUrl(imageUrl);
       } catch (err) {
         console.error("QR generation failed:", err);
         setError("QR generation failed. Please try again.");
       }
-    }, 300);
+    }, 400);
     return () => clearTimeout(timeout);
   }, [fgColor, bgColor, qrSize, inputType, inputs]);
 
@@ -112,11 +103,11 @@ function App() {
   /* ===== Handle Download ===== */
   const handleDownload = async () => {
     if (!pngDataUrl) return;
-
     const fileName = `qr-${qrSize}x${qrSize}.${downloadFormat}`;
 
     switch (downloadFormat) {
-      case "png": {
+      case "png":
+      default: {
         const a = document.createElement("a");
         a.href = pngDataUrl;
         a.download = fileName;
@@ -141,33 +132,6 @@ function App() {
           a.download = fileName;
           a.click();
         };
-        break;
-      }
-      case "webp": {
-        const img = new Image();
-        img.src = pngDataUrl;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0);
-          const webpUrl = canvas.toDataURL("image/webp", 1.0);
-          const a = document.createElement("a");
-          a.href = webpUrl;
-          a.download = fileName;
-          a.click();
-        };
-        break;
-      }
-      case "svg": {
-        const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
         break;
       }
       case "pdf": {
@@ -202,19 +166,6 @@ function App() {
         };
         break;
       }
-      case "eps": {
-        const epsData = svgToEPS(svgString);
-        const blob = new Blob([epsData], { type: "application/postscript" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        break;
-      }
-      default:
-        break;
     }
   };
 
@@ -377,7 +328,7 @@ function App() {
                 <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
               </div>
               <div className="customization-row">
-                <label>Download size:</label>
+                <label>Download Size:</label>
                 <select
                   value={qrSize}
                   onChange={(e) => setQrSize(Number(e.target.value))}
@@ -399,11 +350,8 @@ function App() {
                 >
                   <option value="png">PNG</option>
                   <option value="jpg">JPG</option>
-                  <option value="webp">WebP</option>
-                  <option value="svg">SVG</option>
                   <option value="pdf">PDF</option>
                   <option value="tiff">TIFF</option>
-                  <option value="eps">EPS</option>
                 </select>
               </div>
               <button className="secondary-btn" onClick={handleDownload} disabled={!pngDataUrl}>
@@ -430,7 +378,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>© 2025 QRVerse • Multi-format QR Generator</p>
+        <p>© 2025 QRVerse • Powered by FastAPI backend on Render</p>
       </footer>
     </div>
   );
