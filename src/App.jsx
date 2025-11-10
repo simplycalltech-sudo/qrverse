@@ -24,6 +24,16 @@ function usePersistentState(key, defaultValue) {
   return [value, setValue];
 }
 
+/* ===== SVG → EPS Converter (Frontend) ===== */
+const svgToEPS = (svgData) => {
+  const epsHeader = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1000 1000\n";
+  const epsBody = svgData
+    .replace(/<svg.*?>/, "")
+    .replace("</svg>", "")
+    .replace(/fill="/g, "setrgbcolor\nfill ");
+  return epsHeader + epsBody + "\nshowpage";
+};
+
 /* ===== Main App Component ===== */
 function App() {
   const [inputType, setInputType] = usePersistentState("qrverse-inputType", "URL");
@@ -34,6 +44,7 @@ function App() {
   const [downloadFormat, setDownloadFormat] = usePersistentState("qrverse-format", "png");
 
   const [pngDataUrl, setPngDataUrl] = useState(null);
+  const [svgString, setSvgString] = useState(null);
   const [error, setError] = useState(null);
 
   const API_BASE = "https://qrverse-backend-iodd.onrender.com";
@@ -43,49 +54,38 @@ function App() {
     switch (inputType) {
       case "URL":
         return inputs.url || "";
-
       case "Text":
         return inputs.text || "";
-
       case "Wi-Fi":
         const { ssid, password, encryption } = inputs;
         return `WIFI:S:${ssid || ""};T:${encryption || "WPA"};P:${password || ""};;`;
-
       case "Email":
         const { emailTo, subject, body } = inputs;
         return `mailto:${emailTo || ""}?subject=${encodeURIComponent(subject || "")}&body=${encodeURIComponent(body || "")}`;
-
       case "vCard":
         const { name, phone, email, company } = inputs;
         return `BEGIN:VCARD\nVERSION:3.0\nFN:${name || ""}\nORG:${company || ""}\nTEL:${phone || ""}\nEMAIL:${email || ""}\nEND:VCARD`;
-
       case "Phone":
         return `tel:${inputs.phoneNumber || ""}`;
-
       case "SMS":
         return `SMSTO:${inputs.smsNumber || ""}:${inputs.smsMessage || ""}`;
-
       case "Event":
         const { eventName, eventLocation, eventStart, eventEnd, eventDescription } = inputs;
         return `BEGIN:VEVENT\nSUMMARY:${eventName || ""}\nLOCATION:${eventLocation || ""}\nDTSTART:${eventStart || ""}\nDTEND:${eventEnd || ""}\nDESCRIPTION:${eventDescription || ""}\nEND:VEVENT`;
-
       case "Geo":
         return `geo:${inputs.latitude || ""},${inputs.longitude || ""}${inputs.label ? `?q=${inputs.label}` : ""}`;
-
       case "UPI":
         const { pa, pn, am, cu, tn, tr } = inputs;
         return `upi://pay?pa=${pa || ""}&pn=${pn || ""}${am ? `&am=${am}` : ""}${cu ? `&cu=${cu}` : ""}${tn ? `&tn=${tn}` : ""}${tr ? `&tr=${tr}` : ""}`;
-
       case "MECARD":
         const { fullName, mePhone, meEmail } = inputs;
         return `MECARD:N:${fullName || ""};TEL:${mePhone || ""};EMAIL:${meEmail || ""};;`;
-
       default:
         return "";
     }
   };
 
-  /* ===== Fetch QR from Backend ===== */
+  /* ===== Fetch QR (PNG + SVG) from Backend ===== */
   useEffect(() => {
     const timeout = setTimeout(async () => {
       const content = buildContent();
@@ -103,12 +103,19 @@ function App() {
           error: "H",
         });
 
+        // Fetch PNG
         const response = await fetch(`${API_BASE}/generate?${params.toString()}`);
         if (!response.ok) throw new Error("Backend Error");
-
         const blob = await response.blob();
         const imageUrl = URL.createObjectURL(blob);
         setPngDataUrl(imageUrl);
+
+        // Fetch SVG (for EPS or vector downloads)
+        const svgRes = await fetch(`${API_BASE}/generate?${params.toString()}&fmt=svg`);
+        if (svgRes.ok) {
+          const svgText = await svgRes.text();
+          setSvgString(svgText);
+        }
       } catch (err) {
         console.error("QR generation failed:", err);
         setError("QR generation failed. Please try again.");
@@ -118,9 +125,7 @@ function App() {
   }, [fgColor, bgColor, qrSize, inputType, inputs]);
 
   /* ===== Handle Input Change ===== */
-  const handleChange = (field, value) => {
-    setInputs((prev) => ({ ...prev, [field]: value }));
-  };
+  const handleChange = (field, value) => setInputs((prev) => ({ ...prev, [field]: value }));
 
   /* ===== Handle Download ===== */
   const handleDownload = async () => {
@@ -128,8 +133,7 @@ function App() {
     const fileName = `qr-${qrSize}x${qrSize}.${downloadFormat}`;
 
     switch (downloadFormat) {
-      case "png":
-      default: {
+      case "png": {
         const a = document.createElement("a");
         a.href = pngDataUrl;
         a.download = fileName;
@@ -154,6 +158,34 @@ function App() {
           a.download = fileName;
           a.click();
         };
+        break;
+      }
+      case "webp": {
+        const img = new Image();
+        img.src = pngDataUrl;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          const webpUrl = canvas.toDataURL("image/webp", 1.0);
+          const a = document.createElement("a");
+          a.href = webpUrl;
+          a.download = fileName;
+          a.click();
+        };
+        break;
+      }
+      case "svg": {
+        if (!svgString) return;
+        const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
         break;
       }
       case "pdf": {
@@ -188,6 +220,20 @@ function App() {
         };
         break;
       }
+      case "eps": {
+        if (!svgString) return;
+        const epsData = svgToEPS(svgString);
+        const blob = new Blob([epsData], { type: "application/postscript" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        break;
+      }
+      default:
+        break;
     }
   };
 
@@ -197,11 +243,11 @@ function App() {
       case "URL":
         return <input type="text" placeholder="https://example.com" value={inputs.url || ""} onChange={(e) => handleChange("url", e.target.value)} className="qr-input" />;
       case "Text":
-        return <textarea placeholder="Enter your text..." rows="3" value={inputs.text || ""} onChange={(e) => handleChange("text", e.target.value)} className="qr-input" />;
+        return <textarea placeholder="Enter text..." rows="3" value={inputs.text || ""} onChange={(e) => handleChange("text", e.target.value)} className="qr-input" />;
       case "Wi-Fi":
         return (
           <>
-            <input type="text" placeholder="Network SSID" value={inputs.ssid || ""} onChange={(e) => handleChange("ssid", e.target.value)} className="qr-input" />
+            <input type="text" placeholder="SSID" value={inputs.ssid || ""} onChange={(e) => handleChange("ssid", e.target.value)} className="qr-input" />
             <input type="password" placeholder="Password" value={inputs.password || ""} onChange={(e) => handleChange("password", e.target.value)} className="qr-input" />
             <select value={inputs.encryption || "WPA"} onChange={(e) => handleChange("encryption", e.target.value)} className="qr-input">
               <option value="WPA">WPA/WPA2</option>
@@ -292,7 +338,6 @@ function App() {
 
       <main className="app-main">
         <div className="main-container">
-          {/* Input Section */}
           <section className="section input-section">
             <h2 className="section-title">1️⃣ Enter Your Content</h2>
             <select value={inputType} onChange={(e) => setInputType(e.target.value)} className="qr-input">
@@ -311,7 +356,6 @@ function App() {
             {renderInputFields()}
           </section>
 
-          {/* Customization Section */}
           <section className="section customization-section">
             <h2 className="section-title">2️⃣ Customize & Download</h2>
             <div className="customization-card">
@@ -324,7 +368,7 @@ function App() {
                 <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
               </div>
               <div className="customization-row">
-                <label>Download Size:</label>
+                <label>Download size:</label>
                 <select value={qrSize} onChange={(e) => setQrSize(Number(e.target.value))} className="qr-input">
                   <option value="600">Small (600 × 600)</option>
                   <option value="900">Medium (900 × 900)</option>
@@ -338,8 +382,11 @@ function App() {
                 <select value={downloadFormat} onChange={(e) => setDownloadFormat(e.target.value)} className="qr-input">
                   <option value="png">PNG</option>
                   <option value="jpg">JPG</option>
+                  <option value="webp">WebP</option>
+                  <option value="svg">SVG</option>
                   <option value="pdf">PDF</option>
                   <option value="tiff">TIFF</option>
+                  <option value="eps">EPS</option>
                 </select>
               </div>
               <button className="secondary-btn" onClick={handleDownload} disabled={!pngDataUrl}>
@@ -348,7 +395,6 @@ function App() {
             </div>
           </section>
 
-          {/* Preview Section */}
           <section className="section preview-section">
             <h2 className="section-title">3️⃣ Live Preview</h2>
             <div className="preview-card">
