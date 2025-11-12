@@ -278,3 +278,88 @@ button:disabled {
   min-width: 180px;
 }
 
+/* ===============================
+   QRVerse - Input Validation & Safety Styles
+   =============================== */
+
+/* ===== Validation Text States ===== */
+.validation-text {
+  font-size: 0.9rem;
+  margin-top: 6px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.validation-text.safe {
+  color: #2e7d32; /* ✅ deep green */
+}
+
+.validation-text.warn {
+  color: #f57c00; /* ⚠️ amber/orange */
+}
+
+.validation-text.error {
+  color: #c62828; /* ❌ red */
+}
+
+/* ===== QR Warning Overlay ===== */
+.qr-warning-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.qr-warning-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 193, 7, 0.88); /* soft yellow */
+  color: #000;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 0 0 8px 8px;
+  line-height: 1.2;
+}
+
+/* ===== Blocked QR Placeholder ===== */
+.qr-blocked {
+  padding: 12px;
+  border: 2px dashed #e53935;
+  border-radius: 8px;
+  text-align: center;
+  background-color: rgba(244, 67, 54, 0.05);
+  color: #c62828;
+  font-weight: 600;
+}
+
+/* ===== QR Placeholder for Empty State ===== */
+.qr-placeholder {
+  color: #777;
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: 1rem;
+  opacity: 0.9;
+}
+
+/* ===== Disabled Buttons ===== */
+button:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ===== Optional Animation for Warning QR ===== */
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 10px 4px rgba(255, 193, 7, 0.3);
+  }
+}
+
+.qr-warning-wrapper img {
+  animation: pulse-warning 3s infinite;
+}
