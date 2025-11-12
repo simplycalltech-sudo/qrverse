@@ -1,9 +1,11 @@
 // ==============================
-// QRVerse - Input Safety Validator
+// QRVerse - Input Safety Validator (Enhanced with Encoding, Hidden Executable, and Punycode Checks)
 // ==============================
-// This function validates input content before generating or previewing QR codes.
-// It classifies input as SAFE, WARN, or BLOCK, and provides a message for UI display.
-// It should be imported and called before any backend requests for QR generation.
+// Minimal targeted fixes applied:
+// 1️⃣ Multi-level URL decoding (handles %2E, %252E, %00)
+// 2️⃣ Hidden executable detection in obfuscated URLs
+// 3️⃣ Punycode (IDN) domain warning
+// ==============================
 
 export function validateInputSafety(inputType, content, isVerifiedUser = false) {
   // ---- 1️⃣ Normalize ----
@@ -15,10 +17,22 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     };
   }
 
-  const value = content.trim().toLowerCase();
-  const decoded = decodeURIComponent(value);
-  const noQuery = decoded.split(/[?#]/)[0]; // strip query string
-  const isUrlLike = /^https?:\/\//i.test(value) || /^ftp:\/\//i.test(value);
+  // Multi-level decoding (handles %2E, %252E, etc.)
+  let decoded = content.trim().toLowerCase();
+  for (let i = 0; i < 3; i++) {
+    try {
+      const once = decodeURIComponent(decoded);
+      if (once === decoded) break;
+      decoded = once;
+    } catch {
+      break;
+    }
+  }
+
+  // Remove null bytes and control chars (for %00, etc.)
+  decoded = decoded.replace(/\x00/g, "");
+
+  const isUrlLike = /^https?:\/\//i.test(decoded) || /^ftp:\/\//i.test(decoded);
 
   // ---- 2️⃣ Skip validation for non-URL input types ----
   const nonUrlTypes = ["Text", "Wi-Fi", "Email", "vCard", "Phone", "SMS", "Event", "Geo", "UPI", "MECARD"];
@@ -30,14 +44,14 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
   const unsafeProtocolPattern = /^(javascript:|data:|file:|vbscript:|about:|filesystem:)/i;
   const riskyProtocolPattern = /^(ftp:|telnet:|ssh:|mms:|rtsp:|magnet:)/i;
 
-  if (unsafeProtocolPattern.test(value)) {
+  if (unsafeProtocolPattern.test(decoded)) {
     return {
       status: "block",
       reasonCode: "UNSAFE_PROTOCOL",
       message: "Blocked — unsafe URL scheme (javascript:, data:, file:, etc.) detected.",
     };
   }
-  if (riskyProtocolPattern.test(value)) {
+  if (riskyProtocolPattern.test(decoded)) {
     return {
       status: "warn",
       reasonCode: "RISKY_PROTOCOL",
@@ -61,11 +75,30 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     "bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly", "buff.ly", "dlvr.it", "rebrand.ly", "cutt.ly"
   ];
 
-  // ---- 5️⃣ Extract file extension ----
-  const extensionMatch = noQuery.match(/\.([a-z0-9]+)$/i);
-  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  // ---- 5️⃣ Extract file extension safely ----
+  let extension = "";
+  try {
+    const urlObj = new URL(decoded);
+    const pathname = urlObj.pathname || "";
+    const pathPart = pathname.toLowerCase().split(/[?#]/)[0];
+    const extMatch = pathPart.match(/\.([a-z0-9]+)$/i);
+    extension = extMatch ? extMatch[1].toLowerCase() : "";
+  } catch {
+    const noQuery = decoded.split(/[?#]/)[0];
+    const extMatch = noQuery.match(/\.([a-z0-9]+)$/i);
+    extension = extMatch ? extMatch[1].toLowerCase() : "";
+  }
 
-  // ---- 6️⃣ Executable / Dangerous File Extensions ----
+  // ---- 6️⃣ Hidden executable detection in encoded or obfuscated paths ----
+  if (/\.(exe|msi|bat|cmd|vbs|scr|dll|jar|apk|ps1|sh|aab)(?=[^a-z]|$)/i.test(decoded)) {
+    return {
+      status: "block",
+      reasonCode: "EXECUTABLE_HIDDEN",
+      message: "Blocked — hidden executable signature detected in encoded or obfuscated URL.",
+    };
+  }
+
+  // ---- 7️⃣ Executable / Dangerous File Extensions ----
   if (blockedExtensions.includes(extension)) {
     return {
       status: "block",
@@ -74,7 +107,7 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     };
   }
 
-  // ---- 7️⃣ Archive / Compressed Files ----
+  // ---- 8️⃣ Archive / Compressed Files ----
   if (archiveExtensions.includes(extension)) {
     if (!isVerifiedUser) {
       return {
@@ -91,7 +124,7 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     }
   }
 
-  // ---- 8️⃣ Macro-Enabled Office Documents ----
+  // ---- 9️⃣ Macro-Enabled Office Documents ----
   if (macroEnabledDocs.includes(extension)) {
     return {
       status: "warn",
@@ -100,23 +133,34 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     };
   }
 
-  // ---- 9️⃣ Shortened URLs ----
-  try {
-    const urlObj = new URL(value);
-    const domain = urlObj.hostname.replace(/^www\./, "");
-    if (shortenerDomains.includes(domain)) {
-      return {
-        status: "warn",
-        reasonCode: "SHORTENER",
-        message: `Shortened URL detected (${domain}). Expand the link before generating a QR code.`,
-      };
-    }
-  } catch {
-    // not a valid URL; fall through
+// ---- 🔟 Punycode (IDN) detection — Warn only ----
+try {
+  const urlObj = new URL(decoded);
+  const domain = urlObj.hostname.toLowerCase();
+
+  if (domain.startsWith("xn--")) {
+    return {
+      status: "warn",
+      reasonCode: "PUNYCODE_DOMAIN",
+      message:
+        "Caution — this domain uses internationalized (Punycode) characters. Verify that it belongs to a trusted source before sharing or scanning.",
+    };
   }
 
-  // ---- 🔟 HTTP vs HTTPS ----
-  if (value.startsWith("http://")) {
+  if (shortenerDomains.includes(domain)) {
+    return {
+      status: "warn",
+      reasonCode: "SHORTENER",
+      message: `Shortened URL detected (${domain}). Expand the link before generating a QR code.`,
+    };
+  }
+} catch {
+  // ignore invalid URL
+}
+
+
+  // ---- 11️⃣ HTTP vs HTTPS ----
+  if (decoded.startsWith("http://")) {
     return {
       status: "warn",
       reasonCode: "HTTP",
@@ -124,8 +168,8 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     };
   }
 
-  // ---- 11️⃣ Default Safe Case ----
-  if (isUrlLike || value.startsWith("https://")) {
+  // ---- 12️⃣ Default Safe Case ----
+  if (isUrlLike || decoded.startsWith("https://")) {
     return {
       status: "ok",
       reasonCode: "SAFE",
@@ -133,11 +177,10 @@ export function validateInputSafety(inputType, content, isVerifiedUser = false) 
     };
   }
 
-  // ---- 12️⃣ Invalid or malformed input ----
+  // ---- 13️⃣ Invalid or malformed input ----
   return {
     status: "block",
     reasonCode: "INVALID",
     message: "Invalid or unrecognized input. Please enter a valid URL or text.",
   };
 }
-
