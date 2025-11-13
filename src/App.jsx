@@ -134,6 +134,7 @@ function App() {
       try {
         const params = new URLSearchParams({
           data: content,
+          inputType: inputType,
           fg: fgColor,
           bg: bgColor,
           box_size: "10",
